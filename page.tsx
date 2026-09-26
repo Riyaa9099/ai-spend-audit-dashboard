@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
+
 import {
   PieChart,
   Pie,
@@ -9,314 +10,101 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const TOOL_OPTIONS = ["ChatGPT", "Claude", "Cursor", "Gemini", "GitHub Copilot"];
-
-const PALETTE = ["#1C2321", "#2F6F4E", "#A13D2B", "#B98B2E", "#6E6658"];
-
-type Tool = { id: string; tool: string; spend: string; teamSize: string };
-
-const newTool = (tool: string): Tool => ({
-  id: crypto.randomUUID(),
-  tool,
-  spend: "",
-  teamSize: "",
-});
-
 export default function AuditPage() {
-  const [currency, setCurrency] = useState("$");
-  const [tools, setTools] = useState<Tool[]>([newTool("ChatGPT")]);
-  const [loaded, setLoaded] = useState(false);
-  const summaryId = useId();
 
+  const [currency, setCurrency] = useState("$");
+
+  const [tools, setTools] = useState([
+    {
+      tool: "ChatGPT",
+      spend: "",
+      teamSize: "",
+    },
+  ]);
+
+  // LOAD SAVED DATA
   useEffect(() => {
     const savedTools = localStorage.getItem("tools");
     const savedCurrency = localStorage.getItem("currency");
+
     if (savedTools) {
-      try {
-        setTools(JSON.parse(savedTools));
-      } catch {
-        // ignore corrupt saved state, keep defaults
-      }
+      setTools(JSON.parse(savedTools));
     }
-    if (savedCurrency) setCurrency(savedCurrency);
-    setLoaded(true);
+
+    if (savedCurrency) {
+      setCurrency(savedCurrency);
+    }
   }, []);
 
+  // SAVE DATA
   useEffect(() => {
-    if (!loaded) return; // don't overwrite saved data before it's read
     localStorage.setItem("tools", JSON.stringify(tools));
     localStorage.setItem("currency", currency);
-  }, [tools, currency, loaded]);
+  }, [tools, currency]);
 
-  const addTool = () => setTools([...tools, newTool("Claude")]);
-  const removeTool = (id: string) => setTools(tools.filter((t) => t.id !== id));
-  const updateTool = (id: string, field: keyof Tool, value: string) =>
-    setTools(tools.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+  // ADD TOOL
+  const addTool = () => {
+    setTools([
+      ...tools,
+      {
+        tool: "Claude",
+        spend: "",
+        teamSize: "",
+      },
+    ]);
+  };
 
-  // RECOMMENDATIONS
+  // REMOVE TOOL
+  const removeTool = (index: number) => {
+    const updated = tools.filter((_, i) => i !== index);
+    setTools(updated);
+  };
+
+  // UPDATE TOOL
+  const updateTool = (
+    index: number,
+    field: string,
+    value: string
+  ) => {
+    const updated = [...tools];
+
+    updated[index] = {
+      ...updated[index],
+      [field]: value,
+    };
+
+    setTools(updated);
+  };
+
+  // CALCULATIONS
+  let totalSavings = 0;
+
   const recommendations = tools.map((item) => {
-    const spend = Number(item.spend) || 0;
-    const team = Number(item.teamSize) || 0;
+
     let recommendation = "";
     let savings = 0;
 
-    if (item.tool === "ChatGPT" && team <= 2 && spend > 40) {
+    if (
+      item.tool === "ChatGPT" &&
+      Number(item.teamSize) <= 2 &&
+      Number(item.spend) > 40
+    ) {
       recommendation = "Switch to ChatGPT Plus";
-      savings = spend - 40;
-    } else if (item.tool === "Cursor" && team <= 3 && spend > 20) {
-      recommendation = "Downgrade to Cursor Pro";
-      savings = spend - 20;
-    } else if (item.tool === "Claude" && spend > 30) {
-      recommendation = "Consider a lower Claude tier";
-      savings = spend - 30;
-    } else if (item.tool === "GitHub Copilot" && spend > 19) {
-      recommendation = "Use the individual Copilot plan";
-      savings = spend - 19;
+      savings = Number(item.spend) - 40;
     }
-    return { recommendation, savings };
-  });
 
-  const totalSpend = tools.reduce((sum, t) => sum + (Number(t.spend) || 0), 0);
-  const totalSavings = recommendations.reduce((sum, r) => sum + r.savings, 0);
-  const yearlySavings = totalSavings * 12;
-  const aiScore = totalSpend > 0 ? Math.max(0, Math.min(100, Math.round(100 - (totalSavings / totalSpend) * 100))) : 100;
+    if (
+      item.tool === "Cursor" &&
+      Number(item.teamSize) <= 3 &&
+      Number(item.spend) > 20
+    ) {
+      recommendation = "Downgrade to Cursor Pro";
+      savings = Number(item.spend) - 20;
+    }
 
-  const chartData = tools
-    .map((item) => ({ name: item.tool, value: Number(item.spend) || 0 }))
-    .filter((d) => d.value > 0);
-
-  const highestTool = tools.reduce(
-    (prev, cur) => ((Number(cur.spend) || 0) > (Number(prev.spend) || 0) ? cur : prev),
-    tools[0]
-  );
-
-  const fmt = (n: number) =>
-    `${currency}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-
-  const auditSummary = `You're running ${tools.length} AI tool${tools.length === 1 ? "" : "s"} at ${fmt(totalSpend)} a month. Optimizing subscriptions could save ${fmt(yearlySavings)} a year.`;
-
-  const downloadReport = () => {
-    const lines = [
-      "AI SPEND AUDIT REPORT",
-      "-".repeat(32),
-      "",
-      `Active tools: ${tools.length}`,
-      `Total monthly spend: ${fmt(totalSpend)}`,
-      `Monthly savings identified: ${fmt(totalSavings)}`,
-      `Annual savings identified: ${fmt(yearlySavings)}`,
-      `AI efficiency score: ${aiScore}/100`,
-      `Highest spending tool: ${highestTool.tool} (${fmt(Number(highestTool.spend) || 0)}/mo)`,
-      "",
-      "Line items:",
-      ...tools.map((t, i) => {
-        const r = recommendations[i];
-        return `  ${t.tool} — ${fmt(Number(t.spend) || 0)}/mo, team of ${t.teamSize || 0}${r.recommendation ? ` — ${r.recommendation}, save ${fmt(r.savings)}/mo` : ""}`;
-      }),
-      "",
-      "Summary:",
-      auditSummary,
-      "",
-      "-".repeat(32),
-      "Generated by AI Spend Audit",
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "ai-audit-report.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <main className="min-h-screen bg-[#F7F5F0] text-[#1C2321] font-serif px-6 py-16">
-      <div className="max-w-3xl mx-auto">
-
-        {/* LETTERHEAD */}
-        <div className="flex items-end justify-between gap-6 border-b border-[#1C2321] pb-6">
-          <div>
-            <h1 className="text-4xl font-medium tracking-tight">AI Spend Audit</h1>
-            <p className="text-[#6E6658] mt-1">A line-by-line read of what your team pays for AI tools.</p>
-          </div>
-          <label className="text-sm text-[#6E6658] font-sans text-right shrink-0">
-            Currency
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="block mt-1 bg-transparent border border-[#DAD4C8] rounded px-2 py-1 font-mono text-sm text-[#1C2321] focus:outline-none focus:ring-2 focus:ring-[#2F6F4E]"
-            >
-              <option value="$">USD ($)</option>
-              <option value="₹">INR (₹)</option>
-              <option value="€">EUR (€)</option>
-              <option value="£">GBP (£)</option>
-              <option value="¥">JPY (¥)</option>
-            </select>
-          </label>
-        </div>
-
-        {/* TOTALS BAR */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[#DAD4C8] border-b border-[#DAD4C8] mt-2">
-          {[
-            ["Active tools", tools.length.toString(), "text-[#1C2321]"],
-            ["Monthly spend", fmt(totalSpend), "text-[#A13D2B]"],
-            ["Monthly savings", fmt(totalSavings), "text-[#2F6F4E]"],
-            ["Annual savings", fmt(yearlySavings), "text-[#2F6F4E]"],
-          ].map(([label, value, color]) => (
-            <div key={label} className="px-4 py-5 first:pl-0">
-              <p className="text-sm text-[#6E6658] font-sans">{label}</p>
-              <p className={`font-mono text-2xl mt-1 ${color}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* SCORE + BREAKDOWN */}
-        <div className="grid sm:grid-cols-2 gap-10 py-10 border-b border-[#DAD4C8]">
-          <div>
-            <p className="text-sm text-[#6E6658] font-sans">Efficiency score</p>
-            <p className="font-mono text-5xl mt-2">{aiScore}<span className="text-xl text-[#6E6658]">/100</span></p>
-            <div className="h-px bg-[#DAD4C8] mt-5 relative">
-              <div className="h-px bg-[#1C2321] absolute top-0 left-0" style={{ width: `${aiScore}%` }} />
-            </div>
-            <p className="text-sm text-[#6E6658] font-sans mt-3">
-              Share of current spend that's already well-priced for how it's used.
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-[#6E6658] font-sans mb-2">Where it goes</p>
-            {chartData.length > 0 ? (
-              <div className="flex items-center gap-4">
-                <div className="w-28 h-28 shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={chartData} dataKey="value" innerRadius={32} outerRadius={54} stroke="none">
-                        {chartData.map((_, i) => (
-                          <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => fmt(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <ul className="font-sans text-sm space-y-1.5">
-                  {chartData.map((d, i) => (
-                    <li key={d.name} className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
-                      <span className="text-[#1C2321]">{d.name}</span>
-                      <span className="text-[#6E6658] font-mono">{fmt(d.value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-sm text-[#6E6658] font-sans">Add a monthly spend below to see the split.</p>
-            )}
-          </div>
-        </div>
-
-        {/* LINE ITEMS */}
-        <div className="py-10 border-b border-[#DAD4C8]">
-          <p className="text-sm text-[#6E6658] font-sans mb-4">Line items</p>
-          <div className="space-y-0">
-            {tools.map((item, index) => {
-              const rec = recommendations[index];
-              return (
-                <div key={item.id} className="grid sm:grid-cols-[1.3fr_1fr_0.8fr_1.4fr_auto] gap-3 sm:gap-4 items-start py-4 border-t border-[#DAD4C8] first:border-t-0">
-                  <select
-                    aria-label="Tool"
-                    value={item.tool}
-                    onChange={(e) => updateTool(item.id, "tool", e.target.value)}
-                    className="font-sans bg-transparent border border-[#DAD4C8] rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2F6F4E]"
-                  >
-                    {TOOL_OPTIONS.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
-
-                  <label className="font-sans text-xs text-[#6E6658]">
-                    Spend/mo
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder="0"
-                      value={item.spend}
-                      onChange={(e) => updateTool(item.id, "spend", e.target.value)}
-                      className="block w-full mt-1 font-mono bg-transparent border border-[#DAD4C8] rounded px-2 py-1.5 text-[#1C2321] focus:outline-none focus:ring-2 focus:ring-[#2F6F4E]"
-                    />
-                  </label>
-
-                  <label className="font-sans text-xs text-[#6E6658]">
-                    Team
-                    <input
-                      type="number"
-                      min={0}
-                      step="1"
-                      placeholder="0"
-                      value={item.teamSize}
-                      onChange={(e) => updateTool(item.id, "teamSize", e.target.value)}
-                      className="block w-full mt-1 font-mono bg-transparent border border-[#DAD4C8] rounded px-2 py-1.5 text-[#1C2321] focus:outline-none focus:ring-2 focus:ring-[#2F6F4E]"
-                    />
-                  </label>
-
-                  <div className="font-sans text-sm pt-1">
-                    {rec.recommendation ? (
-                      <>
-                        <p className="text-[#2F6F4E]">{rec.recommendation}</p>
-                        <p className="text-[#6E6658] font-mono text-xs mt-0.5">save {fmt(rec.savings)}/mo</p>
-                      </>
-                    ) : (
-                      <p className="text-[#6E6658]">Already well-priced</p>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => removeTool(item.id)}
-                    disabled={tools.length === 1}
-                    aria-label={`Remove ${item.tool} line item`}
-                    className="font-sans text-sm text-[#A13D2B] hover:underline disabled:text-[#DAD4C8] disabled:no-underline justify-self-start sm:justify-self-end"
-                  >
-                    Remove
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={addTool}
-            className="font-sans text-sm mt-6 border border-[#1C2321] rounded px-4 py-2 hover:bg-[#1C2321] hover:text-[#F7F5F0] transition-colors"
-          >
-            + Add a tool
-          </button>
-        </div>
-
-        {/* HIGHEST SPEND + REPORT */}
-        <div className="grid sm:grid-cols-2 gap-6 py-10 border-b border-[#DAD4C8]">
-          <div>
-            <p className="text-sm text-[#6E6658] font-sans">Highest spending tool</p>
-            <p className="text-2xl mt-1">{highestTool.tool}</p>
-            <p className="font-mono text-[#A13D2B] mt-1">{fmt(Number(highestTool.spend) || 0)}/mo</p>
-          </div>
-          <div className="flex sm:justify-end items-start">
-            <button
-              onClick={downloadReport}
-              className="font-sans text-sm border border-[#1C2321] rounded px-4 py-2 hover:bg-[#1C2321] hover:text-[#F7F5F0] transition-colors"
-            >
-              Download report (.txt)
-            </button>
-          </div>
-        </div>
-
-        {/* SUMMARY */}
-        <div className="py-10">
-          <p id={summaryId} className="text-sm text-[#6E6658] font-sans mb-2">Summary</p>
-          <p aria-labelledby={summaryId} className="text-lg leading-8 border-l-2 border-[#2F6F4E] pl-4">
-            {auditSummary}
-          </p>
-        </div>
-
-      </div>
-    </main>
-  );
-}
+    if (
+      item.tool === "Claude" &&
+      Number(item.spend) > 30
+    ) {
+      recommendation = "Consider lower Claude tier";
+      savings =
