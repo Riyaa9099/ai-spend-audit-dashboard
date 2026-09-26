@@ -1,108 +1,131 @@
+```tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+type SpendItem = {
+  id: number;
+  tool: string;
+  category: string;
+  spend: number;
+  date: string;
+  status: string;
+};
 
-export default function AuditPage() {
+export default function Home() {
+  const [items, setItems] = useState<SpendItem[]>([]);
+  const [tool, setTool] = useState("");
+  const [category, setCategory] = useState("");
+  const [spend, setSpend] = useState("");
+  const [date, setDate] = useState("");
+  const [status, setStatus] = useState("");
 
-  const [currency, setCurrency] = useState("$");
+  const [filterTool, setFilterTool] = useState("All");
+  const [filterCategory, setFilterCategory] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
 
-  const [tools, setTools] = useState([
-    {
-      tool: "ChatGPT",
-      spend: "",
-      teamSize: "",
-    },
-  ]);
+  const [showForm, setShowForm] = useState(false);
 
-  // LOAD SAVED DATA
   useEffect(() => {
-    const savedTools = localStorage.getItem("tools");
-    const savedCurrency = localStorage.getItem("currency");
+    const saved = localStorage.getItem("spendItems");
 
-    if (savedTools) {
-      setTools(JSON.parse(savedTools));
-    }
-
-    if (savedCurrency) {
-      setCurrency(savedCurrency);
+    if (saved) {
+      setItems(JSON.parse(saved));
+    } else {
+      setItems([
+        {
+          id: 1,
+          tool: "ChatGPT",
+          category: "AI Assistant",
+          spend: 25,
+          date: "2025-09-01",
+          status: "Active",
+        },
+        {
+          id: 2,
+          tool: "Claude",
+          category: "AI Assistant",
+          spend: 35,
+          date: "2025-09-05",
+          status: "Active",
+        },
+        {
+          id: 3,
+          tool: "GitHub Copilot",
+          category: "Developer Tool",
+          spend: 19,
+          date: "2025-09-10",
+          status: "Active",
+        },
+        {
+          id: 4,
+          tool: "Notion AI",
+          category: "Productivity",
+          spend: 10,
+          date: "2025-09-12",
+          status: "Inactive",
+        },
+      ]);
     }
   }, []);
 
-  // SAVE DATA
   useEffect(() => {
-    localStorage.setItem("tools", JSON.stringify(tools));
-    localStorage.setItem("currency", currency);
-  }, [tools, currency]);
+    if (items.length > 0) {
+      localStorage.setItem("spendItems", JSON.stringify(items));
+    }
+  }, [items]);
 
-  // ADD TOOL
-  const addTool = () => {
-    setTools([
-      ...tools,
-      {
-        tool: "Claude",
-        spend: "",
-        teamSize: "",
-      },
-    ]);
-  };
+  const addItem = () => {
+    if (!tool || !category || !spend || !date || !status) {
+      alert("Please fill all fields");
+      return;
+    }
 
-  // REMOVE TOOL
-  const removeTool = (index: number) => {
-    const updated = tools.filter((_, i) => i !== index);
-    setTools(updated);
-  };
-
-  // UPDATE TOOL
-  const updateTool = (
-    index: number,
-    field: string,
-    value: string
-  ) => {
-    const updated = [...tools];
-
-    updated[index] = {
-      ...updated[index],
-      [field]: value,
+    const newItem: SpendItem = {
+      id: Date.now(),
+      tool,
+      category,
+      spend: Number(spend),
+      date,
+      status,
     };
 
-    setTools(updated);
+    setItems([...items, newItem]);
+
+    setTool("");
+    setCategory("");
+    setSpend("");
+    setDate("");
+    setStatus("");
+    setShowForm(false);
   };
 
-  // CALCULATIONS
-  let totalSavings = 0;
+  const deleteItem = (id: number) => {
+    setItems(items.filter((item) => item.id !== id));
+  };
 
-  const recommendations = tools.map((item) => {
+  const filteredItems = items.filter((item) => {
+    const toolMatch =
+      filterTool === "All" || item.tool === filterTool;
 
-    let recommendation = "";
-    let savings = 0;
+    const categoryMatch =
+      filterCategory === "All" || item.category === filterCategory;
 
-    if (
-      item.tool === "ChatGPT" &&
-      Number(item.teamSize) <= 2 &&
-      Number(item.spend) > 40
-    ) {
-      recommendation = "Switch to ChatGPT Plus";
-      savings = Number(item.spend) - 40;
-    }
+    const statusMatch =
+      filterStatus === "All" || item.status === filterStatus;
 
-    if (
-      item.tool === "Cursor" &&
-      Number(item.teamSize) <= 3 &&
-      Number(item.spend) > 20
-    ) {
-      recommendation = "Downgrade to Cursor Pro";
-      savings = Number(item.spend) - 20;
-    }
+    return toolMatch && categoryMatch && statusMatch;
+  });
 
-    if (
-      item.tool === "Claude" &&
-      Number(item.spend) > 30
-    ) {
+  const totalSpend = filteredItems.reduce(
+    (sum, item) => sum + item.spend,
+    0
+  );
+
+  const activeTools = filteredItems.filter(
+    (item) => item.status === "Active"
+  ).length;
+
+  const categories = Array.from(
+    new Set(items.m
+```
