@@ -106,5 +106,3 @@ export default function AuditPage() {
       item.tool === "Claude" &&
       Number(item.spend) > 30
     ) {
-      recommendation = "Consider lower Claude tier";
-      savings =
